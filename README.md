@@ -93,7 +93,7 @@ Run the app with the PHP servering on port 8000
 php -S localhost:8000 -t public
 ```
 
-### Call you number
+### Call your number
 
 You can now call your Telnyx phone number and get dropped into a conference. Any subsequent calls will be added to the existing conference. When the final member leaves the conference, the conference is ended and the next inbound caller will be dropped into a new conference.
 
