@@ -13,6 +13,7 @@ $dotenv->load();
 
 $TELNYX_API_KEY    = $_ENV['TELNYX_API_KEY'];
 $TELNYX_PUBLIC_KEY = $_ENV['TELNYX_PUBLIC_KEY'];
+$CONFERENCE_FILE_NAME = '../conference_id.txt';
 
 Telnyx\Telnyx::setApiKey($TELNYX_API_KEY);
 Telnyx\Telnyx::setPublicKey($TELNYX_PUBLIC_KEY);
@@ -21,9 +22,6 @@ $app = AppFactory::create();
 
 // Add error middleware
 $app->addErrorMiddleware(true, true, true);
-
-$conference = '';
-$calls = array();
 
 //Callback signature verification
 $telnyxWebhookVerify = function (Request $request, RequestHandler $handler) {
@@ -34,6 +32,73 @@ $telnyxWebhookVerify = function (Request $request, RequestHandler $handler) {
     $request = $request->withAttribute('telnyxEvent', $telnyxEvent);
     $response = $handler->handle($request);
     return $response;
+};
+
+function readConferenceFile (String $CONFERENCE_FILE_NAME) {
+    if (!file_exists($CONFERENCE_FILE_NAME)) {
+        return FALSE;
+    }
+    else {
+        $conferenceFile = fopen($CONFERENCE_FILE_NAME, 'r') or die("Unable to open file!");
+        $fileConferenceId = fread($conferenceFile, filesize($CONFERENCE_FILE_NAME));
+        return $fileConferenceId;
+    }
+}
+
+function createConferenceFile (String $conferenceId, String $CONFERENCE_FILE_NAME) {
+    $conferenceFile = fopen($CONFERENCE_FILE_NAME, 'w') or die ('Unable to open conference file');
+    fwrite($conferenceFile, $conferenceId);
+    fclose($conferenceFile);
+    return $conferenceId;
+};
+
+function deleteConferenceFile (String $CONFERENCE_FILE_NAME){
+    if (!file_exists($CONFERENCE_FILE_NAME)) {
+        return;
+    }
+    if (!unlink($CONFERENCE_FILE_NAME)) {
+        die ('Can not delete conference file');
+    }
+    return;
+};
+
+function addCallToConference (String $callControlId, String $conferenceId) {
+    $conference = new Telnyx\Conference($conferenceId);
+    $joinConferenceParameters = array(
+        'call_control_id' => $callControlId
+    );
+    $conference->join($joinConferenceParameters);
+};
+
+function createConference (String $callControlId, String $CONFERENCE_FILE_NAME) {
+    $conferenceName = uniqid('conf-');
+    $conferenceParameters = array(
+        'call_control_id' => $callControlId,
+        'name' => $conferenceName,
+        'beep_enabled' => 'always'
+    );
+    $newConference = Telnyx\Conference::create($conferenceParameters);
+    $conferenceId = $newConference->id;
+    createConferenceFile($conferenceId, $CONFERENCE_FILE_NAME);
+    return $conferenceId;
+}
+
+function handleAnswer (String $callControlId, String $CONFERENCE_FILE_NAME) {
+    $speakParams = array(
+        'payload' => 'joining conference',
+        'voice' => 'female',
+        'language' => 'en-GB'
+    );
+    $call = new Telnyx\Call($callControlId);
+    $call->speak($speakParams);
+    $existingConferenceId = readConferenceFile($CONFERENCE_FILE_NAME);
+    if (!$existingConferenceId) {
+        createConference($callControlId, $CONFERENCE_FILE_NAME);
+    }
+    else {
+        addCallToConference($callControlId, $existingConferenceId);
+    }
+    return;
 };
 
 // Add routes
@@ -54,32 +119,26 @@ $app->post('/Callbacks/Messaging', function (Request $request, Response $respons
 });
 
 $app->post('/Callbacks/Voice/Inbound', function (Request $request, Response $response) {
-    global $calls, $conference;
+    global $CONFERENCE_FILE_NAME;
     $telnyxEvent = $request->getAttribute('telnyxEvent');
     $data = $telnyxEvent->data;
     if ($data['record_type'] != 'event') {
         return $response->withStatus(200);
     }
-    $callId = $data->payload['call_control_id'];
+    $callControlId = $data->payload['call_control_id'];
     $event = $data['event_type'];
     switch ($event) {
         case 'call.initiated':
-            $call = new Telnyx\Call($callId);
+            $call = new Telnyx\Call($callControlId);
             $call->answer();
-            $calls[$callId] = $call;
             break;
         case 'call.answered':
-            // $call = $calls[$callId];
-            $speakParams = array(
-                'payload' => 'joining conference',
-                'voice' => 'female',
-                'language' => 'en-GB'
-            );
-            $call = new Telnyx\Call($callId);
-            $call->speak($speakParams);
+            handleAnswer($callControlId, $CONFERENCE_FILE_NAME);
             break;
+        case 'conference.ended':
+            deleteConferenceFile($CONFERENCE_FILE_NAME);
         default:
-            # code...
+            # other events less importante right now
             break;
     }
     return $response->withStatus(200);
