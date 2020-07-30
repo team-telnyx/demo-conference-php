@@ -116,7 +116,7 @@ The basic overview of the application is as follows:
 
 #### Webhook validation middleware
 
-For more details see [Slim's documentation on Route Middleware](http://www.slimframework.com/docs/v4/objects/routing.html#route-middleware)
+Telnyx signs each webhook that can be validated by checking the signature with your public key. This example adds the verification step as middleware to be included on all Telnyx endpoints.  The [Webhooks Doc](https://developers.telnyx.com/docs/api/v2/overview#webhook-signing) elaborates more on how to check the headers and signature.
 
 ```php
 //Callback signature verification
@@ -137,6 +137,9 @@ $telnyxWebhookVerify = function (Request $request, RequestHandler $handler) {
     return $response;
 };
 ```
+
+ℹ️ For more details on middleware see [Slim's documentation on Route Middleware](http://www.slimframework.com/docs/v4/objects/routing.html#route-middleware)
+
 
 #### Conference Management
 
