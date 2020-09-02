@@ -5,6 +5,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 use Slim\Factory\AppFactory;
 use Telnyx;
+use Telnyx\Webhook;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -28,7 +29,7 @@ $telnyxWebhookVerify = function (Request $request, RequestHandler $handler) {
     $payload = $request->getBody()->getContents();
     $sigHeader = $request->getHeader('HTTP_TELNYX_SIGNATURE_ED25519')[0];
     $timeStampHeader = $request->getHeader('HTTP_TELNYX_TIMESTAMP')[0];
-    $telnyxEvent = \Telnyx\Webhook::constructEvent($payload, $sigHeader, $timeStampHeader);
+    $telnyxEvent = Webhook::constructEvent($payload, $sigHeader, $timeStampHeader);
     $request = $request->withAttribute('telnyxEvent', $telnyxEvent);
     $response = $handler->handle($request);
     return $response;
@@ -50,7 +51,7 @@ function createConferenceFile (String $conferenceId, String $CONFERENCE_FILE_NAM
     fwrite($conferenceFile, $conferenceId);
     fclose($conferenceFile);
     return $conferenceId;
-};
+}
 
 function deleteConferenceFile (String $CONFERENCE_FILE_NAME){
     if (!file_exists($CONFERENCE_FILE_NAME)) {
@@ -59,8 +60,7 @@ function deleteConferenceFile (String $CONFERENCE_FILE_NAME){
     if (!unlink($CONFERENCE_FILE_NAME)) {
         die ('Can not delete conference file');
     }
-    return;
-};
+}
 
 function addCallToConference (String $callControlId, String $conferenceId) {
     $conference = new Telnyx\Conference($conferenceId);
@@ -68,7 +68,7 @@ function addCallToConference (String $callControlId, String $conferenceId) {
         'call_control_id' => $callControlId
     );
     $conference->join($joinConferenceParameters);
-};
+}
 
 function createConference (String $callControlId, String $CONFERENCE_FILE_NAME) {
     $conferenceName = uniqid('conf-');
@@ -98,8 +98,7 @@ function handleAnswer (String $callControlId, String $CONFERENCE_FILE_NAME) {
     else {
         addCallToConference($callControlId, $existingConferenceId);
     }
-    return;
-};
+}
 
 // Add route
 
@@ -122,6 +121,7 @@ $app->post('/Callbacks/Voice/Inbound', function (Request $request, Response $res
             break;
         case 'conference.ended':
             deleteConferenceFile($CONFERENCE_FILE_NAME);
+            break;
         default:
             # other events less importante right now
             break;
